@@ -38,6 +38,13 @@ export class UsersService {
     return this.userRepository.update({ id }, updateUserDto);
   }
 
+  updateRefreshToken(
+    id: string,
+    refreshToken: string | null,
+  ): Promise<UpdateResult> {
+    return this.userRepository.update({ id }, { refreshToken });
+  }
+
   async remove(id: string): Promise<boolean> {
     const result: UpdateResult = await this.userRepository.softDelete({
       id,

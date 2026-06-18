@@ -22,7 +22,7 @@ export class User {
   password!: string;
 
   @Column({ type: 'varchar', nullable: true })
-  refreshToken!: string;
+  refreshToken!: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;
