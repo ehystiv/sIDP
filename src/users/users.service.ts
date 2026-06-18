@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, UpdateResult } from 'typeorm';
+import * as argon2 from 'argon2';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
@@ -34,8 +35,17 @@ export class UsersService {
     return this.userRepository.existsBy({ username });
   }
 
-  update(id: string, updateUserDto: UpdateUserDto): Promise<UpdateResult> {
-    return this.userRepository.update({ id }, updateUserDto);
+  async update(
+    id: string,
+    updateUserDto: UpdateUserDto,
+  ): Promise<UpdateResult> {
+    const data = { ...updateUserDto };
+
+    if (data.password) {
+      data.password = await argon2.hash(data.password);
+    }
+
+    return this.userRepository.update({ id }, data);
   }
 
   updateRefreshToken(
