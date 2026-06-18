@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { UsersService } from 'src/users/users.service';
+import { User } from 'src/users/entities/user.entity';
 import * as argon2 from 'argon2';
 import { AuthDto } from './dto/auth.dto';
 
@@ -67,10 +68,14 @@ export class AuthService {
   }
 
   async refreshTokens(userId: string, refreshToken: string) {
-    const user = await this.userService.findOne(userId);
-
-    if (!user || !user.refreshToken)
+    let user: User;
+    try {
+      user = await this.userService.findOne(userId);
+    } catch {
       throw new ForbiddenException('Access Denied');
+    }
+
+    if (!user.refreshToken) throw new ForbiddenException('Access Denied');
 
     const refreshTokenMatches = await argon2.verify(
       user.refreshToken,
