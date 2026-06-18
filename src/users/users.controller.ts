@@ -7,10 +7,13 @@ import {
   Delete,
   UseGuards,
   Query,
+  Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AccessTokenGuard } from '../common/guards/access-token.guard';
+import { IDPRequest } from '../auth/idp-request.interface';
 
 @Controller('users')
 export class UsersController {
@@ -28,13 +31,23 @@ export class UsersController {
 
   @Patch(':id')
   @UseGuards(AccessTokenGuard)
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @Req() req: IDPRequest,
+  ) {
+    if (req.user.sub !== id) {
+      throw new ForbiddenException('You can only update your own account');
+    }
     return this.usersService.update(id, updateUserDto);
   }
 
   @Delete(':id')
   @UseGuards(AccessTokenGuard)
-  remove(@Param('id') id: string) {
+  remove(@Param('id') id: string, @Req() req: IDPRequest) {
+    if (req.user.sub !== id) {
+      throw new ForbiddenException('You can only delete your own account');
+    }
     return this.usersService.remove(id);
   }
 }
