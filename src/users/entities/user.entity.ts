@@ -3,11 +3,14 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  JoinTable,
+  ManyToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
+import { Role } from 'src/roles/entities/role.entity';
 
 @Entity()
 export class User {
@@ -44,4 +47,9 @@ export class User {
   @ApiProperty()
   @DeleteDateColumn()
   deletedAt!: Date;
+
+  @ApiProperty({ type: () => Role, isArray: true })
+  @ManyToMany(() => Role)
+  @JoinTable()
+  roles!: Role[];
 }

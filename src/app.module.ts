@@ -4,8 +4,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import configuration from './config/configuration';
 import { User } from './users/entities/user.entity';
+import { Role } from './roles/entities/role.entity';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
+import { RolesModule } from './roles/roles.module';
 
 @Module({
   imports: [
@@ -23,7 +25,7 @@ import { HealthModule } from './health/health.module';
         username: config.get<string>('database.username'),
         password: config.get<string>('database.password'),
         database: config.get<string>('database.database'),
-        entities: [User],
+        entities: [User, Role],
         synchronize: config.get<boolean>('database.synchronize'),
       }),
       inject: [ConfigService],
@@ -31,6 +33,7 @@ import { HealthModule } from './health/health.module';
     UsersModule,
     AuthModule,
     HealthModule,
+    RolesModule,
   ],
 })
 export class AppModule {}
