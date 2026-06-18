@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { UsersModule } from './users/users.module';
 import configuration from './config/configuration';
 import { User } from './users/entities/user.entity';
@@ -34,6 +36,10 @@ import { RolesModule } from './roles/roles.module';
     AuthModule,
     HealthModule,
     RolesModule,
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'frontend', 'dist'),
+      exclude: ['/api', '/api/*splat', '/docs', '/docs/*splat'],
+    }),
   ],
 })
 export class AppModule {}

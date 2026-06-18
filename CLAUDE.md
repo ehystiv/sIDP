@@ -23,19 +23,25 @@ Package manager: pnpm is recommended (pnpm-lock.yaml is checked in), though npm/
 
 The app requires a running PostgreSQL instance and a `.env` file (see `.env.example`). A `.devcontainer` config and root `docker-compose.yml` are available to spin up app + Postgres together.
 
+A Vue 3 + Vite admin SPA lives in `frontend/` (separate `package.json`, not a pnpm workspace member). `pnpm run build:all` builds the frontend then the backend; `pnpm run build:frontend` builds only the SPA into `frontend/dist`, which the backend serves at `/` in production via `@nestjs/serve-static`. During `start:dev`, run the SPA separately with `pnpm --dir frontend dev` (Vite proxies `/api` to `http://localhost:3000`, see `frontend/vite.config.ts`).
+
 ## Architecture
 
 Standard NestJS module layout under `src/`, each feature as a module with controller/service/dto:
 
 - **`config/configuration.ts`** — single source of typed config (`app`, `database`, `jwt` namespaces) loaded via `@nestjs/config` from environment variables; read elsewhere with `ConfigService.get('namespace.key')`.
-- **`app.module.ts`** — wires `ConfigModule` (global) and `TypeOrmModule.forRootAsync` (Postgres connection built from `ConfigService`), then imports `UsersModule` and `AuthModule`.
-- **`users/`** — `User` TypeORM entity (uuid pk, unique `username`, hashed `password`, nullable `refreshToken`, soft-delete via `deletedAt`). `UsersService` is the only place that touches the `User` repository (create/find/update/soft-delete/hard-delete). `UsersController` exposes CRUD-ish REST endpoints under `/users`; write/delete routes are gated by `AccessTokenGuard`, but `GET` routes (including by-id) are currently public.
+- **`app.module.ts`** — wires `ConfigModule` (global) and `TypeOrmModule.forRootAsync` (Postgres connection built from `ConfigService`), then imports `UsersModule`, `AuthModule`, `HealthModule`, `RolesModule`, and `ServeStaticModule` (serves `frontend/dist` at `/`, excluding `/api*` and `/docs*`).
+- **`main.ts`** sets a global route prefix `api` (`app.setGlobalPrefix('api')`), so every controller below is actually mounted under `/api/...`; Swagger UI is at `/docs` (not `/api`, to avoid colliding with the prefix).
+- **`users/`** — `User` TypeORM entity (uuid pk, unique `username`, hashed `password`, nullable `refreshToken`, soft-delete via `deletedAt`, many-to-many `roles`). `UsersService` is the only place that touches the `User` repository (create/find/update/soft-delete/hard-delete; `findOneWithRoles` loads the `roles` relation for the `RolesGuard`). `UsersController` exposes CRUD-ish REST endpoints under `/api/users`; write/delete routes are gated by `AccessTokenGuard` and restricted to the caller's own account (`req.user.sub === id`), but `GET` routes (including by-id) are currently public.
 - **`auth/`** — implements signup/signin/refresh/logout against `UsersService`:
   - `AuthService` hashes passwords/refresh tokens with `argon2`, issues an access token (15m) and refresh token (7d) signed with separate secrets (`jwt.secret` / `jwt.refresh_secret` from config), and persists the hashed refresh token on the user record for rotation/invalidation.
   - Two Passport strategies: `AccessTokenStrategy` (`'jwt'`) validates the access token; `RefreshTokenStrategy` (`'jwt-refresh'`) validates the refresh token and also attaches the raw refresh token from the `Authorization` header onto the validated payload (needed to compare against the stored hash).
   - `AccessTokenGuard` / `RefreshTokenGuard` in `common/guards/` are thin `AuthGuard()` wrappers around those two strategies — use these (not raw `AuthGuard('jwt')`) when protecting routes.
   - `IDPRequest` (in `auth/idp-request.interface.ts`) is the typed `Request` shape (`req.user`) to use in controllers after either guard runs.
-- Auth endpoints (`POST /auth/signup`, `POST /auth/signin`, `GET /auth/refresh`, `GET /auth/logout`) and user endpoints (`/users`) follow standard Nest DTO validation via classes in each module's `dto/` folder (no global `ValidationPipe` is currently registered in `main.ts`).
+- **`roles/`** — custom, runtime-modifiable roles (not a fixed enum). `Role` entity (uuid pk, unique `name`, nullable `description`) in a many-to-many with `User`. `RolesService` does role CRUD plus `assignToUser`/`removeFromUser`. `RolesController` (`/api/roles`) and `UserRolesController` (`/api/users/:userId/roles/:roleId`) are both gated by `AccessTokenGuard` + `RolesGuard` + `@Roles('admin')`.
+- **`common/guards/roles.guard.ts`** + **`common/decorators/roles.decorator.ts`** — `RolesGuard` reads required role names set via `@Roles(...)` and re-fetches the caller's roles from the database on every request (via `UsersService.findOneWithRoles`), not from the JWT payload, so role changes take effect immediately without waiting for token refresh.
+- **`health/`** — `GET /api/health` (public, no guard) via `@nestjs/terminus`, pings the Postgres connection.
+- Auth endpoints (`POST /api/auth/signup`, `POST /api/auth/signin`, `GET /api/auth/refresh`, `GET /api/auth/logout`) and the other REST endpoints above follow standard Nest DTO validation via classes in each module's `dto/` folder, enforced by a global `ValidationPipe` registered in `main.ts`.
 
 ## Conventions
 

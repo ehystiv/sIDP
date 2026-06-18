@@ -19,8 +19,12 @@ export class UsersService {
   }
 
   findAll(trashed = false): Promise<User[]> {
-    if (trashed) return this.userRepository.find({ withDeleted: true });
-    else return this.userRepository.find();
+    if (trashed)
+      return this.userRepository.find({
+        withDeleted: true,
+        relations: { roles: true },
+      });
+    else return this.userRepository.find({ relations: { roles: true } });
   }
 
   async findOne(id: string): Promise<User> {
