@@ -31,7 +31,7 @@ export class UsersService {
   }
 
   existsUsername(username: string): Promise<boolean> {
-    return this.userRepository.exist({ where: { username } });
+    return this.userRepository.existsBy({ username });
   }
 
   update(id: string, updateUserDto: UpdateUserDto): Promise<UpdateResult> {

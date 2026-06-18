@@ -6,14 +6,11 @@ async function bootstrap() {
   const logger = new Logger('Main');
   const app = await NestFactory.create(AppModule);
 
-  await app.listen(
-    process.env.PORT as string,
-    process.env.HOST as string,
-    () => {
-      logger.log(
-        `Server listen on ${process.env.HOST} at port ${process.env.PORT}`,
-      );
-    },
-  );
+  const port = process.env.PORT ?? '3000';
+  const host = process.env.HOST ?? '0.0.0.0';
+
+  await app.listen(port, host);
+
+  logger.log(`Server listening on ${host} at port ${port}`);
 }
 bootstrap();
