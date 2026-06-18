@@ -31,6 +31,6 @@ export class AuthController {
   @Get('logout')
   @UseGuards(AccessTokenGuard)
   logout(@Req() req: IDPRequest) {
-    this.authService.logout(req.user.sub);
+    return this.authService.logout(req.user.sub);
   }
 }
