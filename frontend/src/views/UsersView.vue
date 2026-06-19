@@ -10,6 +10,27 @@ import {
   updateUser,
 } from '../api/resources';
 import type { Role, User } from '../types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { X } from '@lucide/vue';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const users = ref<User[]>([]);
 const roles = ref<Role[]>([]);
@@ -34,6 +55,11 @@ async function refresh() {
 }
 
 onMounted(refresh);
+
+function onToggleTrashed(value: boolean | 'indeterminate') {
+  trashed.value = value === true;
+  refresh();
+}
 
 function startEdit(user: User) {
   editingId.value = user.id;
@@ -76,7 +102,7 @@ async function onAssignRole(userId: string) {
     roleToAdd.value[userId] = '';
     await refresh();
   } catch (err: any) {
-    error.value = err.response?.data?.message ?? 'Errore durante l\'assegnazione del ruolo';
+    error.value = err.response?.data?.message ?? "Errore durante l'assegnazione del ruolo";
   }
 }
 
@@ -91,63 +117,79 @@ async function onRemoveRole(userId: string, roleId: string) {
 </script>
 
 <template>
-  <div>
-    <div class="toolbar">
-      <h2>Utenti</h2>
-      <label>
-        <input type="checkbox" v-model="trashed" @change="refresh" />
+  <div class="flex flex-col gap-6">
+    <div class="flex items-baseline justify-between">
+      <h2 class="text-2xl font-semibold">Utenti</h2>
+      <Label class="flex items-center gap-2 text-sm">
+        <Checkbox :model-value="trashed" @update:model-value="onToggleTrashed" />
         Mostra eliminati
-      </label>
+      </Label>
     </div>
 
-    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
 
-    <table>
-      <thead>
-        <tr>
-          <th>Nome</th>
-          <th>Username</th>
-          <th>Ruoli</th>
-          <th>Azioni</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="user in users" :key="user.id">
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Nome</TableHead>
+          <TableHead>Username</TableHead>
+          <TableHead>Ruoli</TableHead>
+          <TableHead class="text-right">Azioni</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow v-for="user in users" :key="user.id">
           <template v-if="editingId === user.id">
-            <td><input v-model="editName" /></td>
-            <td><input v-model="editUsername" /></td>
-            <td>—</td>
-            <td>
-              <button @click="saveEdit(user.id)">Salva</button>
-              <button @click="cancelEdit">Annulla</button>
-            </td>
+            <TableCell><Input v-model="editName" /></TableCell>
+            <TableCell><Input v-model="editUsername" /></TableCell>
+            <TableCell>—</TableCell>
+            <TableCell class="flex justify-end gap-2">
+              <Button size="sm" @click="saveEdit(user.id)">Salva</Button>
+              <Button size="sm" variant="outline" @click="cancelEdit">Annulla</Button>
+            </TableCell>
           </template>
           <template v-else>
-            <td>{{ user.name }}</td>
-            <td>{{ user.username }}</td>
-            <td>
-              <span v-for="role in user.roles" :key="role.id" class="chip">
-                {{ role.name }}
-                <button class="chip-remove" @click="onRemoveRole(user.id, role.id)">×</button>
-              </span>
-              <div class="role-assign">
-                <select v-model="roleToAdd[user.id]">
-                  <option value="">+ ruolo</option>
-                  <option v-for="role in availableRoles(user)" :key="role.id" :value="role.id">
-                    {{ role.name }}
-                  </option>
-                </select>
-                <button @click="onAssignRole(user.id)" :disabled="!roleToAdd[user.id]">Aggiungi</button>
+            <TableCell class="font-medium">{{ user.name }}</TableCell>
+            <TableCell class="text-muted-foreground">{{ user.username }}</TableCell>
+            <TableCell>
+              <div class="flex flex-wrap items-center gap-1">
+                <Badge v-for="role in user.roles" :key="role.id" variant="secondary" class="gap-1 pr-1">
+                  {{ role.name }}
+                  <button
+                    type="button"
+                    class="rounded-full p-0.5 hover:bg-muted-foreground/20"
+                    @click="onRemoveRole(user.id, role.id)"
+                  >
+                    <X class="size-3" />
+                  </button>
+                </Badge>
               </div>
-            </td>
-            <td>
-              <button v-if="user.id === authState.userId" @click="startEdit(user)">Modifica</button>
-              <button v-if="user.id === authState.userId" @click="onDelete(user.id)">Elimina</button>
-              <span v-else class="hint">solo il proprietario può modificare</span>
-            </td>
+              <div class="mt-2 flex gap-2">
+                <Select v-model="roleToAdd[user.id]">
+                  <SelectTrigger size="sm" class="h-8 w-36">
+                    <SelectValue placeholder="+ ruolo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="role in availableRoles(user)" :key="role.id" :value="role.id">
+                      {{ role.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button size="sm" variant="outline" :disabled="!roleToAdd[user.id]" @click="onAssignRole(user.id)">
+                  Aggiungi
+                </Button>
+              </div>
+            </TableCell>
+            <TableCell class="text-right">
+              <div v-if="user.id === authState.userId" class="flex justify-end gap-2">
+                <Button size="sm" variant="outline" @click="startEdit(user)">Modifica</Button>
+                <Button size="sm" variant="destructive" @click="onDelete(user.id)">Elimina</Button>
+              </div>
+              <span v-else class="text-xs text-muted-foreground">solo il proprietario può modificare</span>
+            </TableCell>
           </template>
-        </tr>
-      </tbody>
-    </table>
+        </TableRow>
+      </TableBody>
+    </Table>
   </div>
 </template>

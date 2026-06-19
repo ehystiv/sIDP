@@ -20,6 +20,7 @@ Package manager: pnpm is recommended (pnpm-lock.yaml is checked in), though npm/
 - `pnpm run test:e2e` — e2e tests using `test/jest-e2e.json` config
 - Run a single unit test file: `pnpm exec jest src/path/to/file.spec.ts`
 - Run a single e2e test file: `pnpm exec jest --config ./test/jest-e2e.json test/path/to/file.spec.ts`
+- `pnpm run seed:admin -- --username=<u> --password=<p> [--name=<n>]` — standalone script (`src/scripts/seed-admin.ts`) that bootstraps the first admin: creates the `admin` role if missing, creates the user if missing (or reuses an existing one with that username), and assigns the role. Idempotent — safe to re-run. Credentials can also be passed via `ADMIN_USERNAME`/`ADMIN_PASSWORD`/`ADMIN_NAME` env vars. This is the only way to bootstrap an admin since all `roles`/`users` write endpoints are guarded behind an existing admin.
 
 The app requires a running PostgreSQL instance and a `.env` file (see `.env.example`). A `.devcontainer` config and root `docker-compose.yml` are available to spin up app + Postgres together.
 
