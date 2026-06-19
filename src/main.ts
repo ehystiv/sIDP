@@ -8,12 +8,16 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 
 async function bootstrap() {
   const logger = new Logger('Main');
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
+  app.use(requestIdMiddleware);
   app.use(helmet());
   app.enableCors({
     origin: config.get('app.corsOrigin'),
@@ -30,7 +34,11 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(),
+    new ClassSerializerInterceptor(app.get(Reflector)),
+  );
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('sIDP')
