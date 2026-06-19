@@ -13,7 +13,7 @@ describe('Auth flow (e2e)', () => {
   let app: INestApplication;
   let usersService: UsersService;
   const username = `e2e-user-${Date.now()}`;
-  const password = 'password123';
+  const password = 'Str0ng!Pass';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -75,7 +75,7 @@ describe('Auth flow (e2e)', () => {
     await request(app.getHttpServer())
       .post('/auth/signin')
       .send({ username, password: 'wrong-password' })
-      .expect(400);
+      .expect(401);
   });
 
   it('refreshes tokens with a valid refresh token and rejects the logged-out session afterwards', async () => {

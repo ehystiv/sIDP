@@ -1,10 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, UpdateResult } from 'typeorm';
 import * as argon2 from 'argon2';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { User } from './entities/user.entity';
+import {
+  Paginated,
+  PaginationQueryDto,
+} from '../common/dto/pagination-query.dto';
 
 @Injectable()
 export class UsersService {
@@ -18,13 +27,19 @@ export class UsersService {
     return this.userRepository.save(user);
   }
 
-  findAll(trashed = false): Promise<User[]> {
-    if (trashed)
-      return this.userRepository.find({
-        withDeleted: true,
-        relations: { roles: true },
-      });
-    else return this.userRepository.find({ relations: { roles: true } });
+  async findAll(
+    { page = 1, limit = 20 }: PaginationQueryDto,
+    trashed = false,
+  ): Promise<Paginated<User>> {
+    const [data, total] = await this.userRepository.findAndCount({
+      withDeleted: trashed,
+      relations: { roles: true },
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+
+    return { data, total, page, limit };
   }
 
   async findOne(id: string): Promise<User> {
@@ -58,17 +73,33 @@ export class UsersService {
     return this.userRepository.existsBy({ username });
   }
 
-  async update(
-    id: string,
-    updateUserDto: UpdateUserDto,
-  ): Promise<UpdateResult> {
-    const data = { ...updateUserDto };
+  existsEmail(email: string): Promise<boolean> {
+    return this.userRepository.existsBy({ email });
+  }
 
-    if (data.password) {
-      data.password = await argon2.hash(data.password);
+  update(id: string, updateUserDto: UpdateUserDto): Promise<UpdateResult> {
+    return this.userRepository.update({ id }, updateUserDto);
+  }
+
+  async changePassword(
+    id: string,
+    { currentPassword, newPassword }: ChangePasswordDto,
+  ): Promise<boolean> {
+    const user = await this.findOne(id);
+
+    const matches = await argon2.verify(user.password, currentPassword);
+    if (!matches) {
+      throw new BadRequestException('Current password is incorrect');
     }
 
-    return this.userRepository.update({ id }, data);
+    const hashed = await argon2.hash(newPassword);
+    // Invalidate existing sessions on password change by clearing the refresh token.
+    await this.userRepository.update(
+      { id },
+      { password: hashed, refreshToken: null },
+    );
+
+    return true;
   }
 
   updateRefreshToken(
@@ -78,11 +109,49 @@ export class UsersService {
     return this.userRepository.update({ id }, { refreshToken });
   }
 
-  async remove(id: string): Promise<boolean> {
-    const result: UpdateResult = await this.userRepository.softDelete({
-      id,
-      deletedAt: undefined,
+  // --- Admin-only operations ---
+
+  async adminCreate(createUserDto: CreateUserDto): Promise<User> {
+    const exists = await this.existsUsername(createUserDto.username);
+    if (exists) {
+      throw new BadRequestException('Username already exists');
+    }
+
+    if (createUserDto.email && (await this.existsEmail(createUserDto.email))) {
+      throw new BadRequestException('Email already exists');
+    }
+
+    const user = this.userRepository.create({
+      ...createUserDto,
+      password: await argon2.hash(createUserDto.password),
     });
+
+    return this.userRepository.save(user);
+  }
+
+  async resetPassword(id: string, newPassword: string): Promise<boolean> {
+    await this.findOne(id);
+
+    const hashed = await argon2.hash(newPassword);
+    // Clear the refresh token so existing sessions are invalidated.
+    await this.userRepository.update(
+      { id },
+      { password: hashed, refreshToken: null },
+    );
+
+    return true;
+  }
+
+  async restore(id: string): Promise<boolean> {
+    const result = await this.userRepository.restore({ id });
+
+    if (result.affected == 0) throw new NotFoundException('User not found');
+
+    return true;
+  }
+
+  async remove(id: string): Promise<boolean> {
+    const result: UpdateResult = await this.userRepository.softDelete({ id });
 
     if (result.affected == 0) throw new NotFoundException('User not found');
 

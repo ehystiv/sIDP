@@ -19,12 +19,16 @@ export class User {
   id!: string;
 
   @ApiProperty()
-  @Column({ type: 'varchar', unique: true })
+  @Column({ type: 'varchar' })
   name!: string;
 
   @ApiProperty()
   @Column({ type: 'varchar', unique: true })
   username!: string;
+
+  @ApiProperty({ required: false, nullable: true })
+  @Column({ type: 'varchar', unique: true, nullable: true })
+  email!: string | null;
 
   @ApiHideProperty()
   @Column({ type: 'varchar' })

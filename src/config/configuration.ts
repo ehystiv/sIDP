@@ -2,6 +2,7 @@ export default () => ({
   app: {
     port: parseInt(process.env.PORT as string, 10) || 3000,
     host: process.env.HOST || '0.0.0.0',
+    corsOrigin: process.env.CORS_ORIGIN || true,
   },
   database: {
     host: process.env.DATABASE_HOST,
@@ -14,5 +15,7 @@ export default () => ({
   jwt: {
     secret: process.env.JWT_SECRET,
     refresh_secret: process.env.JWT_REFRESH_SECRET,
+    accessTtl: process.env.JWT_ACCESS_TTL || '15m',
+    refreshTtl: process.env.JWT_REFRESH_TTL || '7d',
   },
 });

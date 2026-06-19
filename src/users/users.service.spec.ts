@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as argon2 from 'argon2';
@@ -22,11 +22,13 @@ describe('UsersService', () => {
     id: 'user-id',
     name: 'John Doe',
     username: 'johndoe',
+    email: null,
     password: 'hashed-password',
     refreshToken: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null as unknown as Date,
+    roles: [],
   };
 
   beforeEach(async () => {
@@ -39,10 +41,12 @@ describe('UsersService', () => {
             create: jest.fn(),
             save: jest.fn(),
             find: jest.fn(),
+            findAndCount: jest.fn(),
             findOneBy: jest.fn(),
             existsBy: jest.fn(),
             update: jest.fn(),
             softDelete: jest.fn(),
+            restore: jest.fn(),
             delete: jest.fn(),
           },
         },
@@ -80,21 +84,38 @@ describe('UsersService', () => {
   });
 
   describe('findAll', () => {
-    it('returns non-deleted users by default', async () => {
-      repository.find.mockResolvedValue([mockUser]);
+    it('returns a paginated, non-deleted result by default', async () => {
+      repository.findAndCount.mockResolvedValue([[mockUser], 1]);
 
-      const result = await service.findAll();
+      const result = await service.findAll({ page: 1, limit: 20 });
 
-      expect(repository.find).toHaveBeenCalledWith();
-      expect(result).toEqual([mockUser]);
+      expect(repository.findAndCount).toHaveBeenCalledWith({
+        withDeleted: false,
+        relations: { roles: true },
+        skip: 0,
+        take: 20,
+        order: { createdAt: 'DESC' },
+      });
+      expect(result).toEqual({
+        data: [mockUser],
+        total: 1,
+        page: 1,
+        limit: 20,
+      });
     });
 
-    it('includes soft-deleted users when trashed is true', async () => {
-      repository.find.mockResolvedValue([mockUser]);
+    it('includes soft-deleted users when trashed is true and paginates', async () => {
+      repository.findAndCount.mockResolvedValue([[mockUser], 1]);
 
-      await service.findAll(true);
+      await service.findAll({ page: 2, limit: 10 }, true);
 
-      expect(repository.find).toHaveBeenCalledWith({ withDeleted: true });
+      expect(repository.findAndCount).toHaveBeenCalledWith({
+        withDeleted: true,
+        relations: { roles: true },
+        skip: 10,
+        take: 10,
+        order: { createdAt: 'DESC' },
+      });
     });
   });
 
@@ -166,21 +187,40 @@ describe('UsersService', () => {
         { name: 'New Name' },
       );
     });
+  });
 
-    it('hashes the password before updating when provided', async () => {
+  describe('changePassword', () => {
+    const dto = {
+      currentPassword: 'Curr3nt!Pass',
+      newPassword: 'N3w!Strong',
+    };
+
+    it('rejects when the current password is incorrect', async () => {
+      repository.findOneBy.mockResolvedValue(mockUser);
+      mockedArgon2.verify.mockResolvedValue(false as never);
+
+      await expect(service.changePassword('user-id', dto)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('hashes the new password and clears the refresh token', async () => {
+      repository.findOneBy.mockResolvedValue(mockUser);
+      mockedArgon2.verify.mockResolvedValue(true as never);
+      mockedArgon2.hash.mockResolvedValue('new-hashed-password' as never);
       repository.update.mockResolvedValue({
         affected: 1,
         raw: [],
         generatedMaps: [],
       });
-      mockedArgon2.hash.mockResolvedValue('new-hashed-password' as never);
 
-      await service.update('user-id', { password: 'newpassword123' });
+      await service.changePassword('user-id', dto);
 
-      expect(mockedArgon2.hash).toHaveBeenCalledWith('newpassword123');
+      expect(mockedArgon2.hash).toHaveBeenCalledWith(dto.newPassword);
       expect(repository.update).toHaveBeenCalledWith(
         { id: 'user-id' },
-        { password: 'new-hashed-password' },
+        { password: 'new-hashed-password', refreshToken: null },
       );
     });
   });
@@ -229,7 +269,6 @@ describe('UsersService', () => {
 
       expect(repository.softDelete).toHaveBeenCalledWith({
         id: 'user-id',
-        deletedAt: undefined,
       });
       expect(result).toBe(true);
     });

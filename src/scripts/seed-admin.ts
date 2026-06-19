@@ -16,6 +16,7 @@ async function bootstrap() {
   const username = readArg('username') ?? process.env.ADMIN_USERNAME;
   const password = readArg('password') ?? process.env.ADMIN_PASSWORD;
   const name = readArg('name') ?? process.env.ADMIN_NAME ?? 'Admin';
+  const email = readArg('email') ?? process.env.ADMIN_EMAIL;
 
   if (!username || !password) {
     console.error(
@@ -33,7 +34,7 @@ async function bootstrap() {
     const usersService = app.get(UsersService);
     const rolesService = app.get(RolesService);
 
-    let role = (await rolesService.findAll()).find(
+    let role = (await rolesService.findAll({ page: 1, limit: 100 })).data.find(
       (r) => r.name === ADMIN_ROLE_NAME,
     );
     if (!role) {
@@ -51,6 +52,7 @@ async function bootstrap() {
       const created = await usersService.create({
         name,
         username,
+        email,
         password: hashedPassword,
       });
       userId = created.id;

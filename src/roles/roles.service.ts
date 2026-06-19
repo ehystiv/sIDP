@@ -5,6 +5,10 @@ import { Role } from './entities/role.entity';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { User } from 'src/users/entities/user.entity';
+import {
+  Paginated,
+  PaginationQueryDto,
+} from 'src/common/dto/pagination-query.dto';
 
 @Injectable()
 export class RolesService {
@@ -19,8 +23,17 @@ export class RolesService {
     return this.roleRepository.save(role);
   }
 
-  findAll(): Promise<Role[]> {
-    return this.roleRepository.find();
+  async findAll({
+    page = 1,
+    limit = 20,
+  }: PaginationQueryDto): Promise<Paginated<Role>> {
+    const [data, total] = await this.roleRepository.findAndCount({
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { name: 'ASC' },
+    });
+
+    return { data, total, page, limit };
   }
 
   async findOne(id: string): Promise<Role> {

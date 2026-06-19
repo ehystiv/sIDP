@@ -1,6 +1,6 @@
 services:
   database:
-    image: postgres
+    image: postgres:16
     restart: always
     container_name: ${APP_NAME}_database
     environment:
@@ -8,6 +8,8 @@ services:
       POSTGRES_USER: ${DATABASE_USERNAME}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
     env_file: .env
+    ports:
+      - ${DATABASE_PORT}:5432
     volumes:
       - data:/var/lib/postgresql/data
 

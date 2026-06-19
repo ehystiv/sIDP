@@ -22,7 +22,9 @@ describe('UsersController', () => {
           useValue: {
             findAll: jest.fn(),
             findOne: jest.fn(),
+            findOneWithRoles: jest.fn(),
             update: jest.fn(),
+            changePassword: jest.fn(),
             remove: jest.fn(),
           },
         },
@@ -42,22 +44,53 @@ describe('UsersController', () => {
   });
 
   describe('findAll', () => {
-    it('delegates to the service with the trashed flag', async () => {
-      service.findAll.mockResolvedValue([]);
+    it('delegates to the service with pagination and the trashed flag', async () => {
+      service.findAll.mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+      });
+      const pagination = { page: 1, limit: 20 };
 
-      await controller.findAll(true);
+      await controller.findAll(pagination, true);
 
-      expect(service.findAll).toHaveBeenCalledWith(true);
+      expect(service.findAll).toHaveBeenCalledWith(pagination, true);
     });
   });
 
   describe('findOne', () => {
-    it('delegates to the service with the given id', async () => {
+    it('delegates to the service when the requester views their own account', async () => {
       service.findOne.mockResolvedValue({} as never);
+      const req = buildRequest('user-id');
 
-      await controller.findOne('user-id');
+      await controller.findOne('user-id', req);
 
       expect(service.findOne).toHaveBeenCalledWith('user-id');
+      expect(service.findOneWithRoles).not.toHaveBeenCalled();
+    });
+
+    it('allows an admin to view another account', async () => {
+      service.findOneWithRoles.mockResolvedValue({
+        roles: [{ name: 'admin' }],
+      } as never);
+      service.findOne.mockResolvedValue({} as never);
+      const req = buildRequest('admin-id');
+
+      await controller.findOne('user-id', req);
+
+      expect(service.findOneWithRoles).toHaveBeenCalledWith('admin-id');
+      expect(service.findOne).toHaveBeenCalledWith('user-id');
+    });
+
+    it('throws ForbiddenException for a non-admin viewing another account', async () => {
+      service.findOneWithRoles.mockResolvedValue({ roles: [] } as never);
+      const req = buildRequest('other-id');
+
+      await expect(controller.findOne('user-id', req)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(service.findOne).not.toHaveBeenCalled();
     });
   });
 

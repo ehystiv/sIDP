@@ -2,9 +2,10 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { UsersService } from 'src/users/users.service';
 import { User } from 'src/users/entities/user.entity';
@@ -15,6 +16,11 @@ type Tokens = {
   accessToken: string;
   refreshToken: string;
 };
+
+// Precomputed argon2 hash used to equalize verification timing when a
+// username does not exist, mitigating user-enumeration via timing.
+const DUMMY_PASSWORD_HASH =
+  '$argon2id$v=19$m=65536,t=3,p=4$UOxxoqQdCj3LcZF15P50Ow$od95g9tMmoupiIg6xLoqPGfhRq8W0sNi5pQtvqcuTc4';
 
 @Injectable()
 export class AuthService {
@@ -31,6 +37,13 @@ export class AuthService {
 
     if (userExists) throw new BadRequestException('Username already exists');
 
+    if (
+      createUserDto.email &&
+      (await this.userService.existsEmail(createUserDto.email))
+    ) {
+      throw new BadRequestException('Email already exists');
+    }
+
     const hashedPassword = await this.hashData(createUserDto.password);
 
     const newUser = await this.userService.create({
@@ -46,22 +59,33 @@ export class AuthService {
   }
 
   async signIn(data: AuthDto): Promise<Tokens> {
-    let user: User;
+    let user: User | null = null;
     try {
       user = await this.userService.findByUsername(data.username);
     } catch {
-      throw new BadRequestException('User does not exist');
+      user = null;
     }
 
-    const passwordMatches = await argon2.verify(user.password, data.password);
+    // Always run an argon2 verification to avoid leaking whether the username
+    // exists via response timing. When the user is missing, verify against a
+    // throwaway hash so the comparison cost is comparable.
+    const passwordMatches = user
+      ? await argon2.verify(user.password, data.password)
+      : await argon2
+          .verify(DUMMY_PASSWORD_HASH, data.password)
+          .catch(() => false);
 
-    if (!passwordMatches)
-      throw new BadRequestException('Password is incorrect');
+    if (!user || !passwordMatches)
+      throw new UnauthorizedException('Invalid credentials');
 
     const tokens = await this.getTokens(user.id, user.username);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
 
     return tokens;
+  }
+
+  async me(userId: string): Promise<User> {
+    return this.userService.findOneWithRoles(userId);
   }
 
   async logout(userId: string) {
@@ -97,6 +121,12 @@ export class AuthService {
   }
 
   private async getTokens(userId: string, username: string): Promise<Tokens> {
+    const accessTtl = this.config.get<string>(
+      'jwt.accessTtl',
+    ) as JwtSignOptions['expiresIn'];
+    const refreshTtl = this.config.get<string>(
+      'jwt.refreshTtl',
+    ) as JwtSignOptions['expiresIn'];
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
         {
@@ -105,7 +135,7 @@ export class AuthService {
         },
         {
           secret: this.config.get<string>('jwt.secret'),
-          expiresIn: '15m',
+          expiresIn: accessTtl,
         },
       ),
       this.jwtService.signAsync(
@@ -115,7 +145,7 @@ export class AuthService {
         },
         {
           secret: this.config.get<string>('jwt.refresh_secret'),
-          expiresIn: '7d',
+          expiresIn: refreshTtl,
         },
       ),
     ]);

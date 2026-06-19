@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
@@ -25,11 +29,13 @@ describe('AuthService', () => {
     id: 'user-id',
     name: 'John Doe',
     username: 'johndoe',
+    email: null,
     password: 'hashed-password',
     refreshToken: 'hashed-refresh-token',
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null as unknown as Date,
+    roles: [],
   };
 
   beforeEach(async () => {
@@ -58,6 +64,8 @@ describe('AuthService', () => {
             get: jest.fn((key: string) => {
               if (key === 'jwt.secret') return 'access-secret';
               if (key === 'jwt.refresh_secret') return 'refresh-secret';
+              if (key === 'jwt.accessTtl') return '15m';
+              if (key === 'jwt.refreshTtl') return '7d';
               return undefined;
             }),
           },
@@ -126,17 +134,18 @@ describe('AuthService', () => {
   describe('signIn', () => {
     const dto: AuthDto = { username: 'johndoe', password: 'password123' };
 
-    it('throws BadRequestException when the user does not exist', async () => {
+    it('throws UnauthorizedException when the user does not exist', async () => {
       usersService.findByUsername.mockRejectedValue(new Error('not found'));
+      mockedArgon2.verify.mockResolvedValue(false as never);
 
-      await expect(service.signIn(dto)).rejects.toThrow(BadRequestException);
+      await expect(service.signIn(dto)).rejects.toThrow(UnauthorizedException);
     });
 
-    it('throws BadRequestException when the password does not match', async () => {
+    it('throws UnauthorizedException when the password does not match', async () => {
       usersService.findByUsername.mockResolvedValue(mockUser);
       mockedArgon2.verify.mockResolvedValue(false as never);
 
-      await expect(service.signIn(dto)).rejects.toThrow(BadRequestException);
+      await expect(service.signIn(dto)).rejects.toThrow(UnauthorizedException);
     });
 
     it('returns tokens when credentials are valid', async () => {

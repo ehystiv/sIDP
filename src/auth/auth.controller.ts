@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -19,6 +20,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('signup')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @ApiOperation({ summary: 'Register a new user' })
   @ApiOkResponse({ type: TokensDto })
   signup(@Body() createUserDto: CreateUserDto) {
@@ -26,6 +28,7 @@ export class AuthController {
   }
 
   @Post('signin')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @ApiOperation({ summary: 'Sign in with username and password' })
   @ApiOkResponse({ type: TokensDto })
   signin(@Body() data: AuthDto) {
@@ -33,6 +36,7 @@ export class AuthController {
   }
 
   @Get('refresh')
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
   @UseGuards(RefreshTokenGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Issue a new token pair from a refresh token' })
@@ -41,6 +45,14 @@ export class AuthController {
     const userId = req.user.sub;
     const refreshToken = req.user.refreshToken;
     return this.authService.refreshTokens(userId, refreshToken);
+  }
+
+  @Get('me')
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get the currently authenticated user' })
+  me(@Req() req: IDPRequest) {
+    return this.authService.me(req.user.sub);
   }
 
   @Get('logout')
