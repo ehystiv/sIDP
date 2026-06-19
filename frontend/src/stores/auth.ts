@@ -3,6 +3,10 @@ import api from '../api/client';
 import { decodeJwtPayload } from '../lib/jwt';
 import type { Tokens } from '../types';
 
+// Tokens live in localStorage, which is readable by any script on the page
+// (XSS exposure). Moving the refresh token to an httpOnly cookie would close
+// this gap but requires cookie-based backend endpoints; tracked as a
+// follow-up, not done here.
 const STORAGE_KEY = 'sidp.tokens';
 
 interface AuthState {
