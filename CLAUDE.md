@@ -22,7 +22,7 @@ Package manager: pnpm is recommended (pnpm-lock.yaml is checked in), though npm/
 - Run a single e2e test file: `pnpm exec jest --config ./test/jest-e2e.json test/path/to/file.spec.ts`
 - `pnpm run seed:admin -- --username=<u> --password=<p> [--name=<n>]` — standalone script (`src/scripts/seed-admin.ts`) that bootstraps the first admin: creates the `admin` role if missing, creates the user if missing (or reuses an existing one with that username), and assigns the role. Idempotent — safe to re-run. Credentials can also be passed via `ADMIN_USERNAME`/`ADMIN_PASSWORD`/`ADMIN_NAME` env vars. This is the only way to bootstrap an admin since all `roles`/`users` write endpoints are guarded behind an existing admin.
 
-The app requires a running PostgreSQL instance and a `.env` file (see `.env.example`). A `.devcontainer` config and root `docker-compose.yml` are available to spin up app + Postgres together.
+The app requires a running PostgreSQL instance and a `.env` file (see `.env.example`). A root `docker-compose.yml` is available to spin up app + Postgres together.
 
 A Vue 3 + Vite admin SPA lives in `frontend/` (separate `package.json`, not a pnpm workspace member). `pnpm run build:all` builds the frontend then the backend; `pnpm run build:frontend` builds only the SPA into `frontend/dist`, which the backend serves at `/` in production via `@nestjs/serve-static`. During `start:dev`, run the SPA separately with `pnpm --dir frontend dev` (Vite proxies `/api` to `http://localhost:3000`, see `frontend/vite.config.ts`).
 

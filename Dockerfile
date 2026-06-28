@@ -1,38 +1,52 @@
 ###################
-# BUILD FOR PRODUCTION
+# BUILD
 ###################
+FROM node:24-alpine AS build
 
-FROM node:24 AS build
-RUN corepack prepare pnpm@10.18.0 --activate
+RUN corepack enable && corepack prepare pnpm@10.18.0 --activate
 
-# pnpm refuses destructive operations (e.g. prune) without a TTY unless CI is set
+# Required to compile native addons (argon2, unrs-resolver)
+RUN apk add --no-cache python3 make g++
+
+# Needed by pnpm for non-interactive destructive operations (prune)
 ENV CI=true
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-COPY --chown=node:node pnpm-lock.yaml ./
-COPY --chown=node:node package.json ./
+# Fetch backend deps into the virtual store (only lockfile needed, so this
+# layer is invalidated only when the lockfile changes — not on source edits)
+COPY pnpm-lock.yaml ./
+RUN pnpm fetch
 
-RUN corepack pnpm fetch --prod
-RUN corepack pnpm install
+COPY package.json ./
+RUN pnpm install --frozen-lockfile --offline
 
-COPY --chown=node:node . .
+# Copy source and build backend + frontend SPA
+COPY . .
+RUN pnpm run build:all
 
-RUN corepack pnpm build
-
+# Strip devDependencies before copying to the production image
 ENV NODE_ENV=production
-
-RUN corepack pnpm prune --prod
-
-USER node
+RUN pnpm prune --prod
 
 ###################
 # PRODUCTION
 ###################
-
 FROM node:24-alpine AS production
 
-COPY --chown=node:node --from=build /usr/src/app/node_modules ./node_modules
-COPY --chown=node:node --from=build /usr/src/app/dist ./dist
+ENV NODE_ENV=production
 
-CMD [ "node", "dist/main.js" ]
+WORKDIR /app
+
+# node_modules contains native binaries compiled for Alpine — both stages
+# use node:24-alpine so the binaries are compatible
+COPY --chown=node:node --from=build /app/node_modules ./node_modules
+COPY --chown=node:node --from=build /app/dist ./dist
+# ServeStaticModule resolves join(__dirname, '..', 'frontend', 'dist') → /app/frontend/dist
+COPY --chown=node:node --from=build /app/frontend/dist ./frontend/dist
+
+USER node
+
+EXPOSE 3000
+
+CMD ["node", "dist/main.js"]
