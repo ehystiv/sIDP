@@ -1,7 +1,7 @@
 ###################
 # BUILD
 ###################
-FROM node:24-alpine AS build
+FROM node:26-alpine AS build
 
 RUN corepack enable && corepack prepare pnpm@10.18.0 --activate
 
@@ -32,7 +32,7 @@ RUN pnpm prune --prod
 ###################
 # PRODUCTION
 ###################
-FROM node:24-alpine AS production
+FROM node:26-alpine AS production
 
 ENV NODE_ENV=production
 
