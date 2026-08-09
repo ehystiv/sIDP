@@ -9,6 +9,8 @@
     "node": ">=22"
   },
   "scripts": {
+    "db": "docker compose up database -d",
+    "db:stop": "docker compose stop database",
     "prebuild": "rimraf dist",
     "build": "nest build",
     "build:frontend": "pnpm --dir frontend install && pnpm --dir frontend build",
